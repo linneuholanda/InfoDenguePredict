@@ -18,12 +18,13 @@ from keras import backend as K
 from sklearn.metrics import *
 
 from time import time
-#from infodenguepredict.data.infodengue import (
-#    combined_data,
-#    get_cluster_data,
-#    random_data,
-#    get_city_names,
-#)
+from tqdm import tqdm
+from infodenguepredict.data.infodengue import (
+    combined_data,
+    get_cluster_data,
+    random_data,
+    get_city_names,
+)
 from infodenguepredict.models.deeplearning.preprocessing import (
     split_data,
     normalize_data,
@@ -134,80 +135,62 @@ def plot_training_history(hist):
     # df_mape.plot(ax=ax, grid=True, logy=True);
     # P.savefig("{}/LSTM_training_history.png".format(FIG_PATH))
 
-def make_predictions(model, Xdata, n_pred = 100, pred_window = 1, batch_size=1):
+def predict_with_dropout(model,Xdata,n_predictions,hidden=4,features=7,predict_n=1,look_back=10,\
+                         batch_size=1):
     """
-    Makes several predictions from a model.
-
-    :param model: trained (lstm) model
-    :param Xdata: Feature matrix
-    :param n_pred: Number of predictions
-    :return predictions: Array with predictions
+    Predicts with dropout to generate statistics for predictions
+    :param model: Keras model
+    :param Xdata: Time series features
+    :param n_predictions: Number of times that predictions should be generated
+    :batch_size: Batch size for predictions
     """
-    predictions = [model.predict(Xdata,batch_size=batch_size)[:,:pred_window] for i in range(n_pred)]
+    pred_model = build_model(hidden, features, predict_n, look_back, batch_size)
+    weights = model.get_weights()
+    pred_model.set_weights(weights)
+    pred_model.compile(loss="msle", optimizer="nadam", metrics=["accuracy", "mape", "mse"])
+    #predictions = [pred_model.predict(Xdata,batch_size=batch_size) for i in range(n_pred)]
+    #return np.array(predictions)
+    predictions = [pred_model.predict(Xdata,batch_size=batch_size) for i in tqdm(range(n_predictions))]
+    #predictions =predictions.reshape(len(Xdata),1,n_predictions) 
     return np.array(predictions)
-
-def plot_quantiles(ax,predictions,Ydata,plot = "median",confidence=95, \
-                   data_kw={"label": "data","color":"black"}, pred_kw = {"color":"red"},\
-                  fill_kw={"color":"blue","alpha":0.3,"label": "95% confidence interval"},\
-                   title_kw={"label": "Predictions for Rio de Janeiro","fontsize":20},\
-                   xlabel_kw = {"xlabel": "time","fontsize":14},\
-                   ylabel_kw={"ylabel":"Incidence","fontsize":14},\
-                   grid_params={}):
-    """
-    Plots model predictions
-    """
     
-    ax.grid(**grid_params)
-    ax.plot(Ydata,**data_kw)
-    if plot == "median":
-        pred_kw["label"] = "median"
-        ax.plot(np.percentile(predictions,50,axis=0),**pred_kw)
-    elif plot == "mean":
-        pred_kw["label"] = "mean"
-        ax.plot(np.mean(predictions,axis=0),**pred_kw)
-    if confidence is not None:
-        delta = (100-confidence)/2
-        lower_bound = np.percentile(predictions,delta,axis=0)
-        upper_bound = np.percentile(predictions,100-delta,axis=0)
-        x = np.arange(len(lower_bound))
-        ax.fill_between(x,lower_bound,upper_bound,where=upper_bound>=lower_bound,**fill_kw)
-    if title_kw is not None:
-        ax.set_title(**title_kw)
-    if xlabel_kw is not None:
-        ax.set_xlabel(**xlabel_kw)
-    if ylabel_kw is not None:
-        ax.set_ylabel(**ylabel_kw)
-    ax.legend()
-    return ax
+    
 
-def plot_predicted_vs_data(predicted, Ydata, indice, label, pred_window, factor, split_point=None):
+def plot_predicted_vs_data(predicted, Ydata, index, label, ratio, factor=1, look_back =10,\
+                           pred_window =1):
     """
     Plot the model's predictions against data
     :param predicted: model predictions
     :param Ydata: observed data
-    :param indice:
+    :param index:
     :param label: Name of the locality of the predictions
     :param pred_window:
     :param factor: Normalizing factor for the target variable
     """
+
     P.clf()
     if len(predicted.shape) == 2:
         df_predicted = pd.DataFrame(predicted).T
         df_predicted25 = None
     else:
-        df_predicted = pd.DataFrame(np.percentile(predicted, 50, axis=2))
-        df_predicted25 = pd.DataFrame(np.percentile(predicted, 2.5, axis=2))
-        df_predicted975 = pd.DataFrame(np.percentile(predicted, 97.5, axis=2))
+        df_predicted = pd.DataFrame(np.percentile(predicted, 50, axis=0))
+        print("df_predicted_shape: ", df_predicted.shape)
+        print("df_predicted: ", df_predicted)
+        df_predicted25 = pd.DataFrame(np.percentile(predicted, 2.5, axis=0))
+        df_predicted975 = pd.DataFrame(np.percentile(predicted, 97.5, axis=0))
         uncertainty = True
     ymax = max(predicted.max() * factor, Ydata.max() * factor)
-    P.vlines(indice[split_point], 0, ymax, "g", "dashdot", lw=2)
-    P.text(indice[split_point + 2], 0.6 * ymax, "Out of sample Predictions")
+    #P.vlines(index[split_point], 0, ymax, "g", "dashdot", lw=2)
+    split_point = int(len(index)*ratio)
+    #P.vlines(split_point, 0, ymax, "g", "dashdot", lw=2)
+    #P.text(index[split_point + 2], 0.6 * ymax, "Out of sample Predictions")
     # plot only the last (furthest) prediction point
-    P.plot(indice[7:], Ydata[:, -1] * factor, 'k-', alpha=0.7, label='data')
-    P.plot(indice[7:], df_predicted[df_predicted.columns[-1]] * factor, 'r-', alpha=0.5, label='median')
-    P.fill_between(indice[7:], df_predicted25[df_predicted25.columns[-1]] * factor,
-                   df_predicted975[df_predicted975.columns[-1]] * factor,
-                   color='b', alpha=0.3)
+    P.plot(index[look_back:], Ydata[:, -1] * factor, 'k-', alpha=0.7, label='data')
+    P.plot(index[look_back:], df_predicted.values * factor, 'r-', alpha=0.5, label='median')
+    #P.plot(index[look_back:], df_predicted * factor, 'r-', alpha=0.5, label='median')
+    P.fill_between(index[look_back:], df_predicted25[df_predicted25.columns[-1]] * factor,
+                  df_predicted975[df_predicted975.columns[-1]] * factor,
+                  color='b', alpha=0.3)
 
     # plot all predicted points
     # P.plot(indice[pred_window:], pd.DataFrame(Ydata)[7] * factor, 'k-')
@@ -234,14 +217,14 @@ def plot_predicted_vs_data(predicted, Ydata, indice, label, pred_window, factor,
     P.title("Predictions for {}".format(label))
     P.xlabel("time")
     P.ylabel("incidence")
-    P.xticks(rotation=70)
+    #P.xticks(rotation=70)
     P.legend(["data", "predicted"])
-    P.savefig(
-        "../saved_models/LSTM/{}/lstm_{}{}.png".format(STATE, label, tag),
-        bbox_inches="tight",
-        dpi=300,
-    )
-    P.show()
+    #P.savefig(
+    #    "../saved_models/LSTM/{}/lstm_{}{}.png".format(STATE, label, tag),
+    #    bbox_inches="tight",
+    #    dpi=300,
+    #)
+    #P.show()
 
 
 def loss_and_metrics(model, Xtest, Ytest):
