@@ -135,13 +135,14 @@ def plot_training_history(hist):
     # df_mape.plot(ax=ax, grid=True, logy=True);
     # P.savefig("{}/LSTM_training_history.png".format(FIG_PATH))
 
-def predict_with_dropout(model,Xdata,n_predictions,hidden=4,features=7,predict_n=1,look_back=10,\
+def predict_with_dropout(model,Xdata,n_shots,hidden=4,features=7,predict_n=1,look_back=10,\
                          batch_size=1):
     """
     Predicts with dropout to generate statistics for predictions
     :param model: Keras model
     :param Xdata: Time series features
-    :param n_predictions: Number of times that predictions should be generated
+    :param n_shots: Number of times that predictions should be generated
+    :param predict_n: Number of times ahead to predict
     :batch_size: Batch size for predictions
     """
     pred_model = build_model(hidden, features, predict_n, look_back, batch_size)
@@ -150,21 +151,23 @@ def predict_with_dropout(model,Xdata,n_predictions,hidden=4,features=7,predict_n
     pred_model.compile(loss="msle", optimizer="nadam", metrics=["accuracy", "mape", "mse"])
     #predictions = [pred_model.predict(Xdata,batch_size=batch_size) for i in range(n_pred)]
     #return np.array(predictions)
-    predictions = [pred_model.predict(Xdata,batch_size=batch_size) for i in tqdm(range(n_predictions))]
+    predictions = [pred_model.predict(Xdata,batch_size=batch_size) for i in tqdm(range(n_shots))]
     #predictions =predictions.reshape(len(Xdata),1,n_predictions) 
     return np.array(predictions)
     
     
 
 def plot_predicted_vs_data(predicted, Ydata, index, label, ratio, factor=1, look_back =10,\
-                           pred_window =1):
+                           predict_n =1,plot_n=1,color_pred="red"):
     """
     Plot the model's predictions against data
     :param predicted: model predictions
     :param Ydata: observed data
     :param index:
     :param label: Name of the locality of the predictions
-    :param pred_window:
+    :param predict_n: Number of time in the future to predict
+    :param plot_n: Which prediction to plot (there are predict_n predictions in the future)
+    :param color_pred: Color of predicted curve
     :param factor: Normalizing factor for the target variable
     """
 
@@ -174,8 +177,8 @@ def plot_predicted_vs_data(predicted, Ydata, index, label, ratio, factor=1, look
         df_predicted25 = None
     else:
         df_predicted = pd.DataFrame(np.percentile(predicted, 50, axis=0))
-        print("df_predicted_shape: ", df_predicted.shape)
-        print("df_predicted: ", df_predicted)
+        #print("df_predicted_shape: ", df_predicted.shape)
+        #print("df_predicted: ", df_predicted)
         df_predicted25 = pd.DataFrame(np.percentile(predicted, 2.5, axis=0))
         df_predicted975 = pd.DataFrame(np.percentile(predicted, 97.5, axis=0))
         uncertainty = True
@@ -185,11 +188,11 @@ def plot_predicted_vs_data(predicted, Ydata, index, label, ratio, factor=1, look
     #P.vlines(split_point, 0, ymax, "g", "dashdot", lw=2)
     #P.text(index[split_point + 2], 0.6 * ymax, "Out of sample Predictions")
     # plot only the last (furthest) prediction point
-    P.plot(index[look_back:], Ydata[:, -1] * factor, 'k-', alpha=0.7, label='data')
-    P.plot(index[look_back:], df_predicted.values * factor, 'r-', alpha=0.5, label='median')
+    P.plot(index[look_back:-predict_n+1], Ydata[:, -1] * factor, alpha=0.7, color="black",label='data')
+    P.plot(index[look_back:-predict_n+1], df_predicted.values * factor, color=color_pred, alpha=0.5, label='median')
     #P.plot(index[look_back:], df_predicted * factor, 'r-', alpha=0.5, label='median')
-    P.fill_between(index[look_back:], df_predicted25[df_predicted25.columns[-1]] * factor,
-                  df_predicted975[df_predicted975.columns[-1]] * factor,
+    P.fill_between(index[look_back:-predict_n+1], df_predicted25[df_predicted25.columns[plot_n-1]] * factor,
+                  df_predicted975[df_predicted975.columns[plot_n-1]] * factor,
                   color='b', alpha=0.3)
 
     # plot all predicted points
