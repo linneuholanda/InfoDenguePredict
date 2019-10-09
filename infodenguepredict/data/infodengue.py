@@ -10,13 +10,15 @@ from sqlalchemy import create_engine
 from decouple import config
 import pickle
 
-#db_engine = create_engine("postgresql://{}:{}@{}/{}".format(
-#    config('PSQL_USER'),
-#    config('PSQL_PASSWORD'),
-#    config('PSQL_HOST'),
-#    config('PSQL_DB')
-#))
-
+try:
+    db_engine = create_engine("postgresql://{}:{}@{}/{}".format(
+                config('PSQL_USER'),
+                config('PSQL_PASSWORD'),
+                config('PSQL_HOST'),
+                config('PSQL_DB')
+                ))
+except Exception as e:
+    print(e)
 
 def get_alerta_table(municipio=None, state=None, doenca='dengue'):
     """
