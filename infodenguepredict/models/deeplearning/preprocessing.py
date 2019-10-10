@@ -44,7 +44,7 @@ def normalize_data(df, log_transform=False):
     """
     if 'municipio_geocodigo' in df.columns:
         df.pop('municipio_geocodigo')
-
+    index = df.index
     for col in df.columns:
         if col.startswith('nivel'):
             # print(col)
@@ -55,6 +55,6 @@ def normalize_data(df, log_transform=False):
     norm = normalize(df, norm='max', axis=0)
     if log_transform==True:
         norm = np.log(norm)
-    df_norm = pd.DataFrame(norm, columns=df.columns)
+    df_norm = pd.DataFrame(norm, columns=df.columns,index=pd.to_datetime(index))
 
     return df_norm, df.max(axis=0)

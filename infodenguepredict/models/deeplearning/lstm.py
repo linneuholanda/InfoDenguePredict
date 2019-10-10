@@ -185,7 +185,9 @@ def plot_predicted_vs_data(predicted, Ydata, index, label, ratio, factor=1, look
     ymax = max(predicted.max() * factor, Ydata.max() * factor)
     #P.vlines(index[split_point], 0, ymax, "g", "dashdot", lw=2)
     split_point = int(len(index)*ratio)
-    #P.vlines(split_point, 0, ymax, "g", "dashdot", lw=2)
+    #print("split_point: ", split_point)
+    P.vlines(index[split_point], 0, ymax, "g", "dashdot", lw=2)
+    #P.axvline
     #P.text(index[split_point + 2], 0.6 * ymax, "Out of sample Predictions")
     # plot only the last (furthest) prediction point
     P.plot(index[look_back:-predict_n+1], Ydata[:, -1] * factor, alpha=0.7, color="black",label='data')
